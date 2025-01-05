@@ -1,0 +1,91 @@
+2. Data Models and Query Languages
+
+    - applications require multiple layers of data models, a clean data model is needed at each layer
+
+    Section 1: Relational Model vs Document Model
+
+        - the relational model started theoretically, adopted for an unusually long time by business
+        - won over alternatives such as the network model and the hierarchical model as well as over many other hyped-at-the-time options
+
+        The Birth of NoSQL
+        - successful attempt to replace the relational model
+        - advantages: greater scalability, preference for free and open source software, specialised query operations, less restrictive
+        - the start of polyglot persistence (relational and nonrelational usage in parallel)
+
+        The Object-Relational Mismatch
+        - object-oriented programming and relational databases require an inconvenient translation layer (impedance mismatch)
+        - usually data was represented as XML, later as JSON (the impedance is reduced)
+
+        Many-to-One and Many-to-Many Relationships
+        - IDs are advantageous over other primary keys due to its improbability of being duplicated (minimises the removal of duplication - central ides for normalisation)
+        - normalisation usually requires many-to-one relationships
+
+        Are Document Databases Repeating History?
+        - the best representation of many-to-many had to replace the old hierarchical model (very similar to JSON), the most important proposals being the network model and the relational model
+        - the network model - every record could have multiple parents
+                            - the links between records were not foreign keys
+                            - accessing was done by following an chain of links (access path) (alike the traversal of a linked list)
+                            - is multiple parents were there, the code had to keep track of all the various relationships
+        - the relational model - a relation (table) is a collection of tuples (rows)
+                               - unlike the network model, the access path is very simple
+                               - a query optimiser will need to be built only once
+
+        Relational Versus Document Databases Today
+        - if the data in the application has a document-like structure (tree of one-to-many relationships), probably a document model should be used
+        - is the application has many-to-many relationships, a document model is mostly disadvantageous
+        - schemas tend to be flexible in document models, usually an implicit schema-on-read (only interpreted when data is read)
+        - in relational models, schema-on-write (schema is explicit and the database ensure all written data conforms to it)
+
+    Section 2: Query Languages for Data
+
+        - the relational model brought with it declarative query language like SQL, previously queries being done with imperative code
+
+        Declarative Queries on the Web
+        - declarative query languages are not limited to databases
+
+        MapReduce Querying
+        - MapReduce is a programming model for processing large amounts of data in bulk across many machines, a sort of cross between a declarative query language and a fully imperative query API
+        - it is based on the map (sometimes called collect) and reduce (sometimes called fold or inject) from many functional programming languages
+        - its functional origins can be seen in the nature of this functions: they only use the data passed to them as input, cannot perform additional database queries, must have no side effects
+        - SQL and the like can be implemented on a pipeline of MapReduce operations
+
+    Section 3: Graph-Like Data Models
+
+        - practically the natural choice for many-to-many relationships
+        - have 2 kinds of objects: vertices (nodes) and edges (relationships)
+        - beyond typical example (social, web, road networks) they can be used to store different types of objects (vertices can be people, relations, comments and edges indicate friendships and so on)
+
+        Property Graphs
+        - vertexes consists, each, of: an unique identifier, set of outgoing edges, set of incoming edges, collection of properties (key-value pairs)
+        - edges consists, each, of: an unique identifier, vertex at which the edge starts (tail), vertex at which the edge ends (head), label describing relationships, collection of properties (key-value pairs)
+        - consists of two relational tables (for vertices and for edges)
+        - any vertex can be connected, through an edge, with any other vertex
+        - given a vertex, both incoming and outgoing edges can be easily found
+        - because of different labels for different kinds of relationships, several different kinds of information can be stored
+
+        The Cypher Query Language
+        - declarative query language for neo4j
+        - multiple ways of extracting the desired information
+
+        Graph Queries in SQL
+        - in most cases, more difficult due to the need to traverse a variable number of edges before finding the vertex needed, the number of joins being not fixed in advance
+
+        Triple-Stores and SPARQL
+        - practically equivalent to the property graph model, using different words to describe the same ideas
+        - information is stored in 3-part statements: subject, predicate, object
+        - form the basis for semantic web - websites publishing machine-readable data along with human-readable one
+        - resource description framework (RDF) was a standardised mechanism for the semantic web
+
+        The RDF data model
+        - the Turtle language was designed for it
+
+        The SPARQL query language
+        - query language for triple-stores using the RDF data model
+
+        The Foundation: Datalog
+        - similar to the triple-store model, generalised a bit
+        - predicate(subject, object) instead of (subject, predicate, object)
+
+
+
+
