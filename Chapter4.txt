@@ -1,0 +1,180 @@
+4. Encoding and Evolution
+
+    - changes in application frequently come with changes to the stored data
+    - such changes tend to require changes in code, potentially difficult in large application
+        - server-side applications need rolling upgrades (checking the running of the version, node by node)
+        - client-side applications need the client to install the updates
+    - compatibility of old and new versions running simultaneously in two directions
+        - backward - newer code can read data from older code (usually easier)
+        - forward - older code can read data from newer code (usually harder)
+
+    Section 1: Formats for Encoding Data
+
+        - encoding (also named serialisation or marshalling) describes the self-contained sequence of bytes can can be exchanged between two or more machines, the receiver being able to decode (also named parsing, deserialisation, unmarshalling)
+
+        Language-Specific Formats
+
+        - many programming languages come with built-in support for such encoding (pickle for Python, etc), highly convenient for manipulating in memory
+        - disadvantages are significant, however: such support systems tend to be tied to the specific programming language, in cases where arbitrary classes need to be established for decoding, a source of insecurity is also there, versioning data is frequently an afterthought, loss of efficiency
+
+        JSON, XML, and Binary Variants
+
+        - JSON, XML, CSV are textual formats and thus relatively human-readable
+        - potential problems:
+            - ambiguity around the encoding of numbers: XML and CSV do not distinguish between a number and a string made up of digits; JSON doesn't distinguish integers and floating points, where it doesn't specify precision
+            - JSON and XML don't support binary strings (programmers get around this issue, usually) but data size s increased
+            - schema support in XML and JSON is powerful but complicated to learn and applications that don't use either might need to hardcode the encoding/decoding logic
+            - CSV doesn't have a schema so changes in rows and/or columns, the change has to be handled manually
+        - JSON, XML and CSV are good enough and likely to remain popular manly because the downsides and vastly outweighted by the reached consensus between users
+
+        Binary Encoding
+
+        - data used only internally can be more specialised, which is very advantageous when size is very large, for example
+        - a profusion of binary encoding for JSON and XML exist, adopted in various niches; usually the JSON/XML data model remains unchanged except situations such as distinguishing integers or adding support for binary strings (extending the set of datatypes)
+
+        Thrift and Protocol Buffers
+
+        - Apache Thrift and Protocol Buffers (protobuf) are binary encoding libraries based on the same principles
+        - both require a schema, both come with a code generation tool that takes a schema definition and produces classes that implement the schema in various programming languages, code that can be called by the application
+        - for Thrift, two binary formats (BinaryProtocol and CompactProtocol)
+            - BinaryProtocol - no field names, instead there are numbers that appear in the schema definition
+            - CompactProtocol - packs the same information in a smaller number of bytes, by packing the field type and tag number into a single byte, bigger numbers use more bytes
+        - Protocol Buffers are relatively similar to CompactProtocol
+
+        Field tags and schema evolution
+
+        - schema evolution - term to denote the change, over time of schemas
+        - in Thrift and Protocol Buffers new fields can be added, each with a new tag number that can be ignored by old code (forward compatibility)
+        - if each field has a unique tag number, new code can always read old data, albeit new fields cannot be made required (backward compatibility)
+
+        Datatypes and schema evolution
+
+        - changes in datatypes of a field comes with risk (loss of precision)
+        - Protocol Buffers does not have a list of array datatypes, instead comes with a repeater marker for fields
+        - Thrift has a dedicated list datatype, it can support nested lists
+
+        Avro
+
+        - Apache Avro - uses a schema to specify the structure of encoded data and two languages: one (IDL) for human editing and one for machine-readability (JSON-based)
+        - the schema has no tag numbers, encoding tends to be compact, no identifiers of fields or their datatypes
+        - parsing the data means going through the fields and using the schema to tell the datatypes of each field
+        - the binary data has to use the exact same schema as the code that wrote the data as any mismatch means incorrectly decoded data
+
+        The writer’s schema and the reader’s schema
+
+        - writer’s schema - an application encodes data with whatever version it knows about (???)
+        - reader’s schema - an application decodes data with the expected schema (???)
+        - the reader's and writer's schemas do not have to be the same, the second one is translated into the first (???)
+
+        Schema evolution rules
+
+        - forward compatibility - new version as writer and old version as reader
+        - backward compatibility - new version as reader and old version as writer
+        - compatibility can be maintained by adding or removing a field that has a default value
+        - in Avro, null is not accepted as default for any variable, a union type has to be used
+        - also, Avro doesn't have optional and required markers, unlike Protocol Buffers and Thrift
+        - the datatype of a field is possible but changing the name is tricky
+
+        But what is the writer’s schema?
+
+        - it would be counterproductive to include the schema with every record (space saving no longer makes sense)
+        - multiple definitions
+            - large file with lots of records (the writer's schema is included at the beginning of the file)
+            - database with individually written records (version number as the beginning of every encoded record, a list of schema versions is kept in the database)
+            - sending records over a network connection (the schema can be negotiated over a bidirectional network connection setup)
+
+        Dynamically generated schemas
+
+        - one advantage of Avro is that the schema doesn't contain any tag numbers and therefore friendlier to dynamically generated schemas
+        - an Avro schema can generated from a relational schema and encode the database contents using that schema, dumping to an Avro object container file and in the case that schema changes a new Avro schema from the updated database schema can be generated and exported into it
+        - Thrift and Protocol Buffers needs to assign field tags by hand
+
+        Code generation and dynamically typed languages
+
+        - Thrift and Protocol Buffers rely on code generation - code can be generated that implements the schema in a language of choice (statically typed such as Java or C++ exploit this)
+        - no code generation in dynamically types languages (Python or JavaScript) due to the absence of a type checker
+
+        The Merits of Schemas
+
+        - documentation regarding the evolution of schemas, especially binary ones, is poor
+        - advantages of binary encoding over textual ones include compactness, the schema can be a form of documentation, the kept database of schemas allows checking forward and backward compatibility and the ability to generate code cam prove useful
+
+    Section 2: Modes of Dataflow
+
+        - multiple ways for data to flow from one process to another (via databases, via service calls, via asynchronous message passing)
+
+        Dataflow Through Databases
+
+        - the process that writes the database encodes the data and the process that reads the database decodes it, storing can be interpreted as sending messages to a future self, making backward compatibility a necessity
+        - the processes might be from multiple applications or several instances of the same service and therefore values might be written by newer code and read by older code, making forward compatibility a necessity
+        - an older code might update new fields written by newer code
+
+        Different values written at different times
+
+        - "data outlives code" - in most cases, older data gets preserved practically indefinitely
+
+        Archival storage
+
+        - YEAH, YA DO BACK UPS SOMETIMES, WHAT TO YAP HERE??
+
+        Dataflow Through Services: REST and RPC
+
+        - processes that need to communicate over a network, have different arrangements, the most common being having clients (like web browsers and native applications on mobile) and servers
+        - a server can itself be a client to another service, large applications can be decomposed into smaller services by functionality, such as one service making a request for functionality or data (service-oriented/microservices architecture)
+        - services are dissimilar to databases in that they require a specific API that only allows inputs and outputs predetermined by a specific logic, not arbitrary queries
+        - service-oriented/microservices architecture s supposed to make the application easier to change and maintain
+
+        Web services
+
+        - used beyond the web and multiple kinds exist beyond HTTP
+        - broadly, two approaches exist: REST and SOAP
+        - REST - design philosophy hat builds upon HTTP - simple data formats, using URLs, and HTTP features
+        - SOAP - XML-based protocol for making API requests - potentially independent from HTTP, multitude of related standard are used
+
+        The problems with remote procedure calls (RPCs)
+
+        - the RPC model tries to make a request to a remote network service look the same as calling a function (location transparency)
+        - the approach is flawed due to
+            - the request is unpredictable due to network problems
+            - a function can throw an exception or never return
+            - even if the requests are actually getting through, responses might not
+            - a network request is slower than a local function
+            - parameters need to be encoded as a sequence of bytes
+            - the client and the server may be implemented in different programming languages
+        - the shortcoming explain the appeal of REST
+
+        Current directions for RPC
+
+        - RPC survives in various forms - Thrift and Avro have RPC support and so on
+        - newer frameworks are more explicit in differentiating remote request from function calls
+        - custom RPC protocols with a binary encoding format can achieve better performance
+
+        Data encoding and evolution for RPC
+
+        - backward and forward compatibility of an RPC are inherited from whatever encoding it uses
+        - service compatibility is made harder because organisational boundaries
+
+        Message-Passing Dataflow
+
+        - asynchronous message-passing systems - similar to RPC in that a client's request is delivered to another process and similar to a database in that it is not sent via direct network connection but via a message broker
+        - a message broker has the advantages of
+            - acting like a buffer if the recipient is unavailable
+            - can automatically redeliver messages to a process that has crashed
+            - avoids the sender needing to know the IP address and port number of the recipient
+            - one message can be sent to several recipients
+            - logically decouples the sender from the recipient
+        - communication pattern is asynchronous
+
+        Message Brokers
+
+        - one process sends a message to a named queue or topic, and the broker ensures that the message is delivered to one or more consumers of or subscribers to that queue or topic
+        - brokers typically do not enforce any particular data model
+
+        Distributed actor frameworks
+
+        - actor model - programming model for concurrency in a single process, where instead of threads logic is encapsulated in actors
+        - actors usually represents one client or entity with some local state (unique to it) and communicates with other actors by sending and receiving asynchronous messages
+        - albeit delivery is not guaranteed, the schedule is clear
+        - distributed actor frameworks - used to scale an application across multiple nodes
+        - location transparency works better in the actor model than RPC due to the actor already assuming the message being possibly lost
+        - integrates a message broker and the actor programming model into a single framework
