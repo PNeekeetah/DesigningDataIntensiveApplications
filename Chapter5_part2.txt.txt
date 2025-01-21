@@ -1,0 +1,108 @@
+5. Replication
+
+    Section 3: Multi-Leader Replication
+
+        - major downside of one leader - all writes must go through it, making it problematic when it isn't accessible
+        - multi-leader configuration - allowing multiple leaders to accept writes
+
+        Use Cases for Multi-Leader Replication
+
+        - one use case is is when multiple datacentres exist: a leader exists in each datacentre and between them the leaders replicate the changes to the ones from other datacentres
+        - some advantages might be: improved, perceived or actual, performance; tolerance of datacentre outages, tolerance of network problems
+        - major downside: write conflicts must be resolved
+        - another advantageous situation is when the internet connection is severed - synchronisation can happen when the machine is back online
+        - also, real-time collaborative editing is made possible - the authority to edit a file is broadened and trivial
+
+        Handling Write Conflicts
+
+        - multiple solutions have been found
+        - synchronous conflict detection loses most advantages of multi-leader replication
+        - conflict avoidance is possible and recommended in most instances but, in case of changes in the designated leader this approach breaks down
+        - a database must resolve conflicts in a convergent way (replicas must arrive at the same final value) - ways of doing this might be: unique IDs for each write, unique IDs for each replica, merging values together or recording conflicts
+        - conflict resolution logic - either on write (immediate after detection) or on read (conflict writes are stored and multiple versions of data are returned)
+        - automatic conflict resolution - novel research exists (conflict-free replicated datatypes (CRDTs), mergeable persistent data structures, operational transformation)
+        - the nature of what could be a conflict can be rather subtle
+
+        Multi-Leader Replication Topologies
+
+        - replication topology - communication paths along which writes are propagated form node to node
+        - all-to-all - writes are send to every other leader
+        - circular - a node receives a write and forwards it
+        - star - one node forwards to other nodes (can be generalised to a tree)
+        - infinite replication loops can happen in star and circular configurations so unique IDs are required and a major problem with this cases is that when a single node fails, the flow can be interrupted
+        - all-to-all topologies can have issues with different speeds in nodes
+
+    Section 4: Leaderless Replication
+
+        - this approach allows any replica to accept directly from clients
+        - fell out of use due to relational databases and re-emerged due to Dynamo-style systems
+        - in some implementations the client sends writes directly to replicas while in others a coordinator is used (which does not enforce a particular ordering)
+
+        Writing to the Database When a Node Is Down
+
+        - failovers do not exist in leaderless configurations - the client sends the write to all replicas in parallel, if a write is missed the client ignores it
+        - when the missing node recovers, values from it may get stale (outdated), the solution used is to send read requests to several nodes in parallel
+
+        Read repair and anti-entropy
+
+        - after coming online a node will catch up in two ways: read-repair and anti-antropy process
+        - read-repair - when parallel reads are made, any stale responses can be detected
+        - anti-entropy process - a background process that constantly looks for differences in the data between replicas and copies missing data from one to another but not in any particular order and with potential delays
+
+        Quorums for reading and writing
+
+        - for n number of replicas, every write must be confirmed by w nodes to be successful and r queries from nodes must be read.
+        - w + r > n must hold true for making sure an up-to-date value is returned during reading
+        - r an w are called quorum reads and writes
+        - in Dynamo-style databases, n, w, r are usually configurable (most common n is an odd number and w and r are (n+1)/2 each)
+
+        Limitations of Quorum Consistency
+
+        - quorums are not necessarily majorities, the set of nodes used by the read and write must overlap in at least one node
+        - if w + r <= n, a smaller number of successful responses is required for the operation to succeed - more likely to get stale values but the latency is lower and availability higher
+        - even with w + r > n some edge cases exist: w writes may end up on different nodes than r reads, no longer guaranteeing overlap; if two writes happen concurrently it is not clear which one happened first; if a write happens concurrently with a read, write may be reflected only in only one of the replicas; if the write had partial success, it may not be rolled back; if a node carrying a replica fails the data may be restored from a replica with an old value; timing may be unlucky
+
+        Monitoring staleness
+
+        - monitoring is more difficult than in leader-based replication because of the lack of a fixed order and even worse if no anti-entropy is used
+
+        Sloppy Quorums and Hinted Handoff
+
+        - quorum are not as fault-tolerant as they could be, network interruptions may cut clients from the database
+        - a trade-off of either returning errors for all requests where a quorum is not reached or accepting them anyway (sloppy quorum) (actually not a quorum but an assurance of durability)
+        - optional in all Dynamo implementations
+
+        Multi-datacentre operation
+
+        - leaderless replication is suitable for multiple datacentres
+
+        Detecting Concurrent Writes
+
+        - concurrent writes to the same key mean that conflicts are unavoidable
+        - replicas need to converge towards the same value but automatic solutions are not satisfactory usually
+
+        Last write wins (discarding concurrent writes)
+
+        - replicas need only store the more "recent" value, "older" ones need to be overwritten and discarded
+        - "recent" is misleading, clients might not know about the other one sent its write requests
+        - an arbitrary order might be forced on the writes, for example a last write wins (LWW) found in Cassandra but such convergence comes at the cost of durability
+
+        The “happens-before” relationship and concurrency
+
+        - two operations are concurrent if neither happens before the other, otherwise one happened before another (REALLY????)
+
+        Capturing the happens-before relationship
+
+        - a server can determine whether two operations are concurrent without needing to interpret the value itself: the server maintains a version number for every time a key is written and stores it; when the client reads the key, the server returns all values not overwritten with the latest version number; when the client reads the key the version number must be included; when the server receives the write with the new version number it can overwrite all values with the version number or below
+
+        Merging concurrently written values
+
+        - clients have to merge the concurrently written values (siblings), a problem practically of conflict resolution
+        - the union solve the issue of duplicates but is not good for cases when removing items is necessary
+        - the system must leave a marker of the correct version number to indicate removal (tombstone)
+
+        Version vectors
+
+        - a version number must be used per replica as well as per key - each replica increments its version number and keeps track of version numbers from other replicas (version vector)
+
+
