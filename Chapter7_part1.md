@@ -1,7 +1,5 @@
 # Transactions
 
-221 + 23 -> 244
-
 - Many issues can occur in data systems
   1. Database Hardware/ software failure
   2. The app may crash 
@@ -76,7 +74,7 @@
 - Storage engines aim to provide atomicity and isolation on single objects
 - Atomicity can be implemented with a log for crash recovery
 - Isolation can be implemented with row level locks
-- Single object ops are useful, but they are not transactions in the traditional sense of the temr
+- Single object ops are useful, but they are not transactions in the traditional sense of the term
 
 ### Multi object writes
 
@@ -136,7 +134,7 @@
 
 - Read commited might seem like it provides the Atomicity and Isolation you need, but it doesn't
 - `Read skew` (or `nonrepeatable read`) can occur (this is demonstrated in Figure 7-6 on page 237 or 259 in the digital version)
-- such inconsitencies are ok in some situations, but backups cannot tolerates them (since restoring such a backup results in permanent money loss in the case of Figure 7-6)
+- such inconsistencies are ok in some situations, but backups cannot tolerates them (since restoring such a backup results in permanent money loss in the case of Figure 7-6)
 - Snapshot isolation is a common solution to this problem
 - Every transaction reads from a consistent snapshot of the database i.e. the transaction sees only the data BEFORE it started executing
 - Snapshot isolation is a popular feature ( PostgreSQL, Oracle, MYSQL all implement it)
@@ -152,7 +150,7 @@
 
 1. At the start of a transaction, check all incomplete transactions - ignore all writes
 2. Ignore all writes of aborted TXs
-3. TXs with a latert TXID are ignored, regardless of commit status
+3. TXs with a latest TXID are ignored, regardless of commit status
 4. All other writes are visible to the app's queries
 
 An object is visible IFF
