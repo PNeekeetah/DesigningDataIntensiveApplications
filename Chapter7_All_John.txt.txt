@@ -1,0 +1,92 @@
+Automically Detecting lost updates
+	+ One way to prevent lost updates is by using atomic operations and locks
+	+ Another option is parallel execution of transactions and abort the failed transactions, 
+	while also forcing the retry of its read-modify-write cycle
+		Pros:
+			-can be used efficiently in databases toghether with snapshot isolation (some databases do not 
+			have automatic ways to detect lost updates)
+______________________________________________________________________________________________________________________
+
+Compare-and-set
+	+In transactionless databases, you may encounter atomic compare-and-set operations.
+	+It checks if the current value is changed since the last read. If it is, the read-modify-write cycle is
+	aborted/retired -> It avoids lost updates
+______________________________________________________________________________________________________________________
+
+Conflict resolution and replication
+	+Previous options rely on the database to be a mono-copy.
+	+One approach is using concurent writes and using application code to solve conflicts
+	+Another way is using commutative atomic operations
+	+Problem: Last Write Win (LWW) is the default for some replicated databases, which is prone to lost updates
+______________________________________________________________________________________________________________________
+
+Write Skew and Phantoms
+	+Write skew (fig 7-8, page 247)
+		-Problems:
+			>Atomic single-object -> not feasible as multiple objects are involved
+			>Databases can not automatically detect write scews and most of them can not apply same
+			constrains on multiple objects
+			>Serialiaztion is not a solution either
+		-Possible solution: Lock rows that the transaction is dependent on
+
+_______________________________________________________________________________________________________________________
+			
+	+Phantoms
+		-can cause write skews
+		-the process where a change from one transaction affects another
+_______________________________________________________________________________________________________________________
+
+Materializing conflicts
+	+Principle of materializing phantom conflicts
+	+Prone to errors and hard to debug
+_______________________________________________________________________________________________________________________
+
+Serializability
+	+ Strong Isolation level
+	+ Even though the transactions are run in parallel, the result would be the same as if they were run serially
+	+ Techniques:
+		-Actual Serial Execution
+		-Two-Phase Locking (2PL)
+		-Serializable Snapshot Isolation (SSI)
+_______________________________________________________________________________________________________________________
+
+Actual Serial Execution
+	+Using a single thread to run the transactions
+	+As it uses a single CPU core, transactions need to be structured differently from their traditional form
+_______________________________________________________________________________________________________________________
+
+Stored procedures
+	+Cons:
+		>each database has its own language
+		>these languages are UGLY and lack the modern ecosystem
+		>databases' code is hard to manage, tricky to test and debug, cannot collect metrics as easily
+		>badly written stored procedures can cause more issues than application code
+	Pros:
+		>Modern implementations use general-purpose programming languages
+		>With stored procedures and in-memory data, executing all transactions on a single thread becomes feasible
+_______________________________________________________________________________________________________________________
+
+Partitioning
+	+If you can have transactions that can be used  on partitions of the database, we can linearly increase write
+	capabilities with the number of CPUs
+_______________________________________________________________________________________________________________________
+
+2PL
+	+writers don’t just block other writers; they also block readers and vice versa
+	+is used by the serializable isolation level in MySQL (InnoDB) and SQL Server,and the repeatable read
+	isolation level in DB2
+	+performance: transaction throughput and response times of queries are significantly worse under two-phase
+	locking than under weak isolation.
+________________________________________________________________________________________________________________________
+
+SSI
+	+provides full serializability, but has only a small performance penalty compared to snapshot isolation
+	+SSI is used both in single-node databases and distributed databases
+	+when a transaction wants to commit, it is checked, and it is aborted if the execution was not serializable
+________________________________________________________________________________________________________________________
+
+Detecting stable MVCC
+
+	+snapshot isolation is usually implemented by multi-version concurrency control (MVCC)
+	+the database needs to track when a transaction ignores another transaction’s writes due to MVCC
+	visibility rules
