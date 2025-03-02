@@ -1,0 +1,217 @@
+8. The Trouble with Distributed Systems
+
+    - a continuation (and elevation) of the assumption from previous chapters that various things can not function properly into one that everything that can go wrong will
+    - the chapter has algorithms that can provide guarantees that such systems will work
+    - discussed are issues with unreliable networks, clocks and timing as well as a way of reasoning about what happened
+
+    Section 1: Faults and Partial Failures
+
+        - programs running on single computers might crash (internal fault), which can be considered preferable to returning the wrong result - CPU instructions always do the same thing and the data doesn't get corrupted (apparently)
+        - this idealised system model no longer fits distributed systems
+        - partial failure - some parts of the system are broken in some unpredictable way, even if other parts work correctly; they are nondeterministic - repairs may or may not work and sometimes even not know whether it does or not
+
+        Cloud Computing and Supercomputing
+
+        - spectrum of large-scale computing: from high-performance computing (HPC) to cloud computing with traditional data centres between these two
+        - because of such differences, multiple philosophies had to be developed
+        - for supercomputers a job typically checkpoints the state of its computation to durable storage periodically
+        - in case of a failure of a node, a common solution is to stop the cluster entirely and restart, after repair, from last checkpoint
+        - supercomputers are more akin to single-node computers than distributed systems
+        - contrast to internet systems is significant
+            - internet systems are online - they must be able to serve users with low latency and it is not acceptable to make the system unavailable
+            - supercomputers must be constructed from specialised and reliable hardware while cloud nodes are built from commodity machines with higher failure rates
+            - data centre networks have different topologies from supercomputers
+            - in systems with thousand of nodes, something is always broken so handling strategies cannot be ones that imply spending too much time recovering from faults
+            - cloud allows killing a machine and requesting other
+            - supercomputing is not geographically distributed
+        - partial failure must be accepted and fault-tolerance built
+
+        Building a Reliable System from Unreliable Components
+
+        - the "weakest link" idea does not apply here, a less reliable base can be used to construct a more reliable system
+        - error-correcting codes allow some errors in transmission
+        - IP is unreliable because packets can be dropped, duplicated, reordered, etc
+        - TCP is more reliable, missing packets are retransmitted, duplicated eliminated, etc
+        - however, a limit to reliability exists - error-correcting codes can deal with only a few errors, TCP cannot deal properly with delays
+
+    Section 2: Unreliable Networks
+
+        - shared-nothing architectures, where machine with memories and disks were connected but cannot access each other's, were discussed until this point
+        - not unique but price-advantageous
+        - the internet and other internal networks are asynchronous packet networks - sending packages does not mean the network guarantees its arrival
+        - some such situations are: losing requests, waiting in queue, failure in remote node, remote node not responsive, lost response on the network, processing happened but delivery is later
+        - the sender finds impossible to know why such cases happen, in many cases
+        - timeout - after a waiting period, the sender can assume that the response is not going to arrive
+
+        Networks Faults in Practice
+
+        - systematic studies are few, a lot of analysis is based on anecdotal evidence
+        - 12 faults / medium-sized data centre / month in one case
+        - adding redundant network gear did not help
+        - in public loud services such as EC2, network topology reconfigurations can happen during updates or bloody sharks can eat the damn cables
+        - error handling of network faults must be defined and tested
+        - handling faults does not mean tolerating them - a valid approach can be to show error messages to users or deliberately triggering problems to test the response
+
+        Detecting faults
+
+        - automatic detection of faults is possible
+        - network uncertainty makes it difficult to tell whether a node is actually working but some feedback in specific cases is possible
+            - if no process is listening on the destination port, the OS can close or refuse TCP connections
+            - if a node crashed, a script can notify the other nodes about the crash
+            - a management interface can offer query features for link failures in data centres
+            - a router might reply with the ICMP Destination Unreachable packet
+        - even rapid feedback does not solve the issue of an application crashing before handling
+
+        Timeouts and Unbounded Delays
+
+        - the necessary duration of a timeout for detecting faults cannot be (easily) determined
+        - if long the wait is long until declaring the node dead while a short one can incorrectly declare one so
+        - a declared dead node must have its responsibilities transferred to other node, problematic in systems with already high load
+        - most systems work without guaranteed delays - asynchronous networks have unbounded delays (no upper limit to how long it takes for a packet to arrive)
+
+        Network congestion and queueing
+
+        - variability if packet speed is most often due to queueing
+            - simultaneously sent packages must be queued and fed one by one and if a switch queue fills up, packets are dropped
+            - even if reached in time, CPU cores might be busy and the request is dropped by the OS
+            - virtualised OSs might be paused and the VM cannot consume data from the network
+            - TCP performs flow control (a node limits its rate of sending to avoid overloading)
+        - TCP considers packages lost if not acknowledged within a timeout
+        - in public clouds and data centres, network delays can be variable if a nearby machine uses a lot of resources (noisy neighbour) - timeouts can be chosen experimentally
+        - systems can continuously measure response times and their variability (jitter) and adjust timeouts to the distribution
+
+        TCP Versus UDP
+
+        - UDP > TCP for latency-sensitive applications like VoIP
+        - UDP > TCP when data delayed is worthless
+
+        Synchronous Versus Asynchronous Networks
+
+        - a comparison of data centre with telephone networks - for telephone, a circuit is established and fixed with bandwidth allocated to it along the entire route and remains in place until the call ends
+        - such a network is synchronous - even if it has to pass though several routers it does not suffer from queueing because the bits of space have already been reserved and end-to-end latency is fixed (bounded delay)
+
+        Can we not simply make network delays predictable?
+
+        - TCP connections are different - bandwidth is used opportunistically if free
+        - Ethernet and IP do not have the concept of a circuit
+        - data centre networks and the internet use packet switching because they are optimised for bursty traffic - actions performed on the web do not have any bandwidth requirement
+        - over a circuit, this situations would require a bandwidth allocation which must be guessed (too low, the transfer is slow, too high, the circuit cannot be set up)
+        - hybrid systems exist but usually need a quality of service and admission control (rate-limiting senders) but this features are not enabled in data centres and public clouds
+
+        Latency and Resource Utilization
+
+        - variable delays can be interpreted as a consequence of dynamic resource partitioning
+        - in telephone networks, resources are divided in a static way - no matter how unused the network, a fixed amount of bandwidth is allocated
+        - internet shares bandwidth dynamically, allocation is decided from one moment to the next
+        - threads in CPUs must follow similar patterns but the number of CPU cycles is allocated statically
+        - latency guarantees are possible in certain environments if resources are statically partitioned but at a cost of reduced utilisation
+
+    Section 3: Unreliable Clocks
+
+        - clocks and time are important as applications are dependent on them - durations and points in time can be relevant depending on what information is needed
+        - communication is not instant in distributed systems, a message is received later than sent but unclear how late
+        - also, each machine has its own clock, not necessarily synchronised, Network Time Protocol (NTP) being a possible solution
+
+        Monotonic Versus Time-of-Day Clocks
+
+        - Time-of-day clocks
+            - familiar clocks, returns the current date and time according to the calendar
+            - functions like the ones in Linux or many programming languages returns the number of seconds since the epoch (UTC midnight 1st January 1970)
+            - still has oddities and issues
+        - Monotonic clocks
+            - suitable for measuring durations (time intervals) such as timeouts or service response time
+            - name comes from fact that they are guaranteed to always move forward (time-of-day clocks can go back in time)
+            - absolute value of the clock is meaningless
+
+        Clock Synchronization and Accuracy
+
+        - monotonic clocks do not need synchronisation but need to be set according to an NTP server or other external source
+        - vulnerabilities exist
+            - the quartz clock in a computer drifts (runs faster or slower) depending on various factors
+            - differences between the clock and NTP server can cause forced synchronisations or resets
+            - accidental firewalling from NTP servers can cause misconfigurations
+            - NTP synchronisation may be only as good as the network delay
+            - some NTP servers are wrong or misconfigured
+            - leap seconds can result in longer or shorter minutes
+            - virtual machines have virtualised hardware clocks, coming with its own challenges
+            - devices not fully under control of the user are not trustworthy
+        - accuracy is possible is sufficient resources are invested - regulations for financial institutions mean they have to synchronise their clocks to within 100 microseconds
+
+        Relying on Synchronized Clocks
+
+        - problems with clocks sometimes resemble previously discussed ones
+        - software must be designed with the assumption that the network will occasionally be faulty
+        - incorrect clocks easily go unnoticed
+        - monitoring clocks is essential
+        - timestamps for ordering events
+            - when ordering of events across multiple nodes it can be dangerous to rely on clocks
+            - last write wins (LWW) - a strategy used when dealing with this problem; a replicated write is tagged with a timestamp according to the time-of-day clock where it originated; however, database writes can disappear, cannot distinguish between writes in quick succession and ones that are truly concurrent and it is possible to have writes at the same timestamp
+            - logical clocks - based on incrementing counters instead of quartz crystals, they measure only the relative ordering of events
+        - clock readings have a confidence interval
+            - even very precise clocks will not return exactly the desired value due to a number of factors
+            - an uncertainty bound due to delays can be calculated using various devices (atomic clocks attached to the computer, for example)
+            - most systems do not take account this uncertainty
+        - synchronized clocks for global snapshots
+            - snapshot isolation requires a monotonically increasing transaction IDs, difficult when the database is distributed
+            - timestamps from synchronised time-of-day clocks can be used as transaction IDs but problems with accuracy must be considered
+            - Spanner offers a possible implementation
+
+        Process Pauses
+
+        - in a database with a single leader per partition - how does a node know it is still leader has multiple options
+        - a lease can be obtained from other nodes that must be periodically renewed
+        - threads that use synchronised clocks might be paused unexpectedly
+            - garbage collectors need to stop all running threads
+            - virtualised environments can be suspended
+            - in end-user devices execution might be suspended and resumed arbitrarily
+            - OS context-switches to another thread or hypervisor switches to a different VM
+            - synchronous disk access need threads to be paused
+            - OS is configured to allow swapping to disk (paging)
+            - Unix processes can be stopped using the SIGSTOP signal
+        - response time guarantees - in some systems a specified deadline, before a system must respond, must exist (hard real-time systems) and providing such guarantees requires support from all levels of the software stack
+        - limiting the impact of garbage collection - some emerging ideas like treating GC pauses the same as outages of nodes or using it only for short-lived objects
+
+    Section 4: Knowledge, Truth, and Lies
+
+        - in distributed systems there is no shared memory, messages passing via unreliable networks with partial failures, unreliable clocks and processing pauses and therefore a node cannot "know" anything for sure
+        - nodes can check the state of another node through exchanging messages
+        - multiple philosophical school of thoughts can be had starting from these observations
+
+        The Truth Is Defined by the Majority
+
+        - scenarios where a node cannot judge a situation properly can be: all messages from a node are dropped or delayed but can receive from any other, a node is wrongly declared dead by other nodes despite the node in question being able to identify the issue, a long stop-the-world GC pause
+        - quorum (voting among the nodes) must be relied upon, usually needing a minimum number of votes from several nodes being necessary with the most common decision-taking being the absolute majority of half the nodes
+        - the leader and the lock
+            - only one node is allowed to be the leader of a database partition and only one transaction or client is allowed to hold the lock for a particular resource as well as having only one user allowed to register a particular username
+            - a node needs to be accepted as being a leader by the quorum and stop working a leader when it loses this status
+        - fencing tokens
+            - a solution to this potential problem is issuing a fencing token with an expiry term to the leader
+
+        Byzantine Faults
+
+        - fencing tokens have a vulnerability - nodes can subvert a system's guarantees by sending messages with a fake fencing token
+        - a risk that has to be taken into consideration is that a node may "lie" (sending faulty or corrupted responses) like claiming to have received a message when it didn't (Byzantine fault)
+        - Byzantine fault-tolerance - a system can continue to operate correctly even if some of the nodes are malfunctioning or in case of attack
+        - rarer in the kind of systems discussed here but very relevant in peer-to-peer networks with no central authority
+        - weak forms of lying - hardware issues, software bugs and misconfigurations can be treated as a milder form of this problem and usually have a simple and pragmatic solution
+
+        The Byzantine Generals Problem
+
+        - generalisation of Two Generals Problem (two army generals need to agree on a battle plan with difficult communication)
+        - traitors exist, they are a minority but cannot be identified
+
+        System Model and Reality
+
+        - a system model is an abstraction of what things an algorithm may assume
+        - three models in common use:
+            - synchronous - bounded network delay, process pauses and clock errors; not realistic in most cases
+            - partially synchronous - behaves like a synchronous system most of the time but sometimes exceeds bounds; realistic in most cases
+            - asynchronous - timing assumptions not allowed; very restrictive
+        - node failures must be considered:
+            - crash-stop faults - a node can fail in only one way
+            - crash-recovery faults - a node can crash at any moment and respond after an unknown time and have stable storage
+            - Byzantine faults - nodes may do absolutely anything
+        - correctness of an algorithm - correctness is defined by describing properties, uniqueness, monotonic sequence and availability
+        - safety and liveness - safety is defined as "nothing bad happens" while liveness is defined as "something good eventually happens"; is safety is violated, a point in time at which it was broken can be identified and a liveness property might not be true a point in time
+        - mapping system models to the real world - abstractions can fail in practice and this must be kept in mind albeit they do not make the models useless
+
