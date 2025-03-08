@@ -20,7 +20,7 @@
 - stronger consistency models come off and at a performance cost 
 - stronger consistency models are easier to reason about when developing
 - there are some similarities between the level of isolations that exist for transactions and consistency 
-- distributed consistency is about coordinating replicas when faced with delays and faults 
+- distributed (systems) consistency is about coordinating replicas when faced with delays and faults 
 
 ### Linearizability 
  
@@ -41,7 +41,7 @@ We get an overview of what linearizability means by going through a few worked e
 
 !!! linearizability is different from serializability 
 - serializability means that transactions behave as if they have been executed in a certain order 
-- linearizability on the other hand is a recency guarantee on reason rights of register 
+- linearizability on the other hand is a recency guarantee on the read register 
 
 - databases may provide both serializability and linearizability 
 - this is called strict serializability 
@@ -56,7 +56,7 @@ We get an overview of what linearizability means by going through a few worked e
 -  all nodes must be able to agree on which node owns the lock
 -  services such as `Zookeeper` and `etcd` are often used to implement distributed locks and leader election 
 -  Apache Curator provides higher level recipes on top of Zookeeper to achieve linearizability 
--  a linearize storage service is the foundation for these coordination tasks 
+-  a linearizable storage service is the foundation for these coordination tasks 
 
 ### Constraints and uniqueness guarantees 
 
@@ -87,7 +87,7 @@ We get an overview of what linearizability means by going through a few worked e
 
 -  consensus algorithms are linearized and they bear resemblance to single leader replication 
 -  consensus protocols contain measures to prevent split brain 
--  this is how zookeeper works 
+-  this is how Zookeeper works 
 
 -  multileader replication is not linearizable because multiple writes happen concurrently and then they get asynchronously replicated to other nodes 
 -  this this can produce conflicting writes in the database 
@@ -104,7 +104,7 @@ We get an overview of what linearizability means by going through a few worked e
 - Dynamo style quorums can be made linearizable at the cost of performance
 - Cassandra provides read repair in the presence of non-concurrent writes
 - Riak does not
-- Only linearizable reads and writes can be implemented like this - compare and set cannot be
+- Only linearizable reads and writes can be implemented like this  - compare and set cannot be
 - Dynamo style quorums are most likely not linearizable 
 
 ### The cost of linearizability 
@@ -114,6 +114,7 @@ We get an overview of what linearizability means by going through a few worked e
 -  this makes the application unavailable for the client's connected to the data centre without the leader 
 
 ### The CAP theorem 
+
 - if the application requires linearizability and some replicas are disconnected it effectively means that the disconnected replica has become unavailable 
 - if the application does not require linearizability it can be written such that replicas process requests independently but the reads and writes will not be linearized 
 - CAP is a sliding scale between consistent but unavailable and available but inconsistent 
@@ -138,7 +139,7 @@ We get an overview of what linearizability means by going through a few worked e
 -  we use timestamps and clocks in an attempt to create order 
 -  there exists a deep connection between ordering, linearizability and consensus 
 
-### ordering and causality 
+### Ordering and causality 
 
 -  ordering helps preserve causality 
 -  we have seen that it is confusing to see the answer of to a question before the question was asked - questions and answers must be causal
@@ -151,7 +152,6 @@ We get an overview of what linearizability means by going through a few worked e
 - consider the application with on call doctors where two doctors tried to take themselves off the on-call at the same time 
 -  consider the example where a  person finds the score of a match from a different channel but the website provides different information 
 -  causality imposes an ordering on events | CAUSE comes before EFFECT
-
 - a system which obeys the order imposed by causality is said to be `causally consistent` 
 
 ### The causal order is not a total order 
@@ -163,14 +163,15 @@ We get an overview of what linearizability means by going through a few worked e
 - some operations are ordered with respect to each other but you cannot compare their orders to others 
 
 ### Linearizability is stronger than causal consistency 
+
 -  the relationship between linearizability and causality is that linearizability implies causality 
 -  linearizability makes systems easier to reason but imposes severe performance restrictions
-
 - causal consistency allows a system to remain available in spite of network faults - it's a good middleground
 - many systems which appear to require linearizability in fact require causal consistency 
 - not a lot of these have made it onto production systems YET 
 
 ### Capturing causal dependencies 
+
 -  in order to maintain causality on replicas you need a partial ordering on the events that happened and when you replay them you need to ensure that you maintain the causal dependency between the events 
 - you cannot register events on a replica before they happened (A -> B -> C / you cannot register C first)
 - the reference to the CEO investigation because he's a criminal is funny 
@@ -210,7 +211,7 @@ We get an overview of what linearizability means by going through a few worked e
 - this approach works well when looking in retrospect - it doesn’t work when trying to decide on the spot which user wins the username assignment  
 - if the username assignment problem, you need to check with all the nodes to know when the order is finalized  
 - to implement a uniqueness constraint for a username, it's not sufficient to have total ordering / you need to know when the order is finalized  
-  - you need to establish that nobody else can claim this username before you insert it into your db  
+- you need to establish that nobody else can claim this username before you insert it into your db  
 
 ## Total order broadcast  
 
