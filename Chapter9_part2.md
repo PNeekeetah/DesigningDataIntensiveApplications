@@ -236,3 +236,38 @@ log (in case of a crash) - this is the commit point
 
 ### Membership and coordination services
 
+- Zookeeper and etcd are called a `distributed KV store` or `coordination and configuration services`
+- they are basically databases, so why do they need consensus?
+- Kafka, Openstack Nova and Hadoop rely on Zookeeper (you never really use ZK directly)
+- Zookeeper and etcd hold small ammounts of data that are held in memory
+- ZK is modelled after Google's `Chubby Lock` - comes with some other useful features in distributed systems
+    1. Linearizable atomic operations 
+    2. Total ordering of operations
+    3. Failure detection (ZK and nodes exchange heartbeats - after several such missed heartbeats, the node is declared dead)
+    4. Change notifications ( clients can find out when other clients join the cluster rather that polling)
+
+### Allocating work to nodes
+
+- if you have several instances of a service and one of them needs to be chosen as a leader, ZK works well
+- if you have partitioned resources ( e.g some partitions need to be moved to new nodes to rebalance )
+- if done correctly, these allow automatic recovery without human intervention
+- manual implementations of consensus algorithms has a poor track record
+- applications might run on a single node initally, but might scale to 1000's 
+- ZK runs on a fixed number of nodes 
+- data stored on ZK is slow changing - data stored on other nodes/dbs might change millions of times per day
+
+### Service discovery
+
+- ZK and Consul are used for this (e.g. which address do you need to connect to for this service)
+- applications register their endpoints in a service registry
+- service discovery might not require consensus - DNS is not linearizable, it's just a bunch of caches
+- leader election requires consensus though, so it makes sense to help other applications discover who the leader is
+- some consensus replicas support `read only caching replicas` 
+
+### Membership services
+
+- A membership service determines which nodes from a cluster are live and active
+- you can couple consensus with failure detection to see which nodes are out
+- a node can be incorrectly considered dead, but it's still useful to know beforehand which nodes consstitute part of this membership
+
+
