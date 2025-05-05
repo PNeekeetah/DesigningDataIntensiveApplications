@@ -84,7 +84,7 @@
 - Reads and writes occur as normal - nodes are called participants in the transaction
 - When the application is ready to commit, the coordinator sends a prepare request to each node 
     -> if all respond yes, send commit request
-    -> if all respond no, send rollback request
+    -> if any respond no, send rollback request
 
 - It's just like marriage!
 
@@ -96,8 +96,7 @@
 2. a single node TX is started on all nodes with the unique TX id
 3. when ready to commit, the coordinator sends a prepare request with the TX id to all participants
 4. participants may NOT abort the TX once they respond to the prepare request with yes (crashes, power failures, running out of disk space are not acceptable)
-5. coordinator writes to disk its transaction
-log (in case of a crash) - this is the commit point
+5. coordinator writes to disk its transaction log (in case of a crash) - this is the commit point
 6. Once the decision is written to disk, the commit/abort request is sent to all participants
 
 - Once we've reached 6, there will be as many retries as necessary until the commit is fulfilled
@@ -129,9 +128,9 @@ log (in case of a crash) - this is the commit point
 - they provide a safety guarantee, BUT they bring a considerable performance overhead
 - cloud services don't implement these
 - Distributed transactions in MySQL are reported to be 10X slower than single node transactions
-- the performance cost is because of the disk forcing for crash reovery adn network round trips
+- the performance cost is because of the disk forcing for crash recovery and network round trips
 - 2 types of distributed transactions
-    1. Databse internal distributed transactions - VoltDb, MySQL Cluster's NDB storage engine have such an internal transaction support. all nodes are running the same db software
+    1. Database internal distributed transactions - VoltDb, MySQL Cluster's NDB storage engine have such an internal transaction support. all nodes are running the same db software
     2. Heterogeneous distributed transactions - participants have different DBs on them 
 
 - Database internal transactions don't have to be compatible with any other system 
@@ -143,13 +142,13 @@ log (in case of a crash) - this is the commit point
 ( I don't actually understand this one )
 - a message from a queue is said to be processed IFF the db transaction processing the message succesfully commited
 - with distributed transaction support, this is possible even if the message broker are 2 unrelated technologies running on different machines
-- if message delivery fails or db transaction fails, bnoth are aborted and the message broker can safely re-deliver / atomically commiting the message
-- and the side effects of its porcesing esnures the message is processed only once
+- if message delivery fails or db transaction fails, both are aborted and the message broker can safely re-deliver / atomically commiting the message
+- and the side effects of its procesing ensures the message is processed only once
 
 ### XA Transaction
 
 - eXtended Architecture - standard for implementing 2PC across heterogeneous technologies
-- Many relational DBs support XA ( PostgresQL, MYSQL, ORacle) as well as Message Brokers (ActiveMQ, MSMQ, IBM MQ)
+- Many relational DBs support XA ( PostgresQL, MYSQL, Oracle) as well as Message Brokers (ActiveMQ, MSMQ, IBM MQ)
 - XA is a C API for interfacing with a transaction coordinator
 - bindings for the API exist in other languages - in JAVA, XA Transactions are implemeted using JTA 
 - it's supported by drivers for DBs using Java Database Connectivity (JDBC) and Java Message Service (JMS)
@@ -262,12 +261,9 @@ log (in case of a crash) - this is the commit point
 - applications register their endpoints in a service registry
 - service discovery might not require consensus - DNS is not linearizable, it's just a bunch of caches
 - leader election requires consensus though, so it makes sense to help other applications discover who the leader is
-- some consensus replicas support `read only caching replicas` 
 
 ### Membership services
 
 - A membership service determines which nodes from a cluster are live and active
 - you can couple consensus with failure detection to see which nodes are out
-- a node can be incorrectly considered dead, but it's still useful to know beforehand which nodes consstitute part of this membership
-
-
+- a node can be incorrectly considered dead, but it's still useful to know beforehand which nodes constitute part of this membership
