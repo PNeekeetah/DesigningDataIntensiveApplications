@@ -49,7 +49,7 @@
 - Tez/ Spark / Flink don't store an intermediate state / if a job fails, they either recompute from data that is still available (a prior intermediary stage ) or they recompute from the original data
 - these frameworks keep track of how data was computed
 - Spark uses the resilient distributed dataset abstraction for tracking data ancestry
-- Flink checkpoints operator state ( can resum,e from  that state)
+- Flink checkpoints operator state ( can resume from  that state)
 - When recomputing data, is the computation deterministic ? If yes, attempt from the last known checkpoint, otherwise kill all downstream operators
 - Using clocks, reading hash sets and using statistical algorithms all represent sources of non-determinism - you have to avoid these to build reliable worflows
 - If intermediary state is small enough, you're better off storing it than recomputing it
@@ -61,12 +61,56 @@
 - sorting needs all the data in order to work correctly / other parts of the workflow can be executed in a pipeline manner though
 - The output is still written to the HDFS in the end /you just save yourself writing intermediate states
 
-# Graphs and iterative procesing
+## Graphs and iterative procesing
 
-- PageRank is one of the most graph analysis algorithms ( how popular is a page given the references it has )
+- PageRank is one of the most popular graph analysis algorithms ( how popular is a page given the references it has )
 - Dataflow engines arrange operators like a DAG - not the same as graph processing ! The data flows through a graph-like structure in dataflow engines, whereas graph processing is processing objects which are graphs !
 - Map reduce cannot implement the idea of `repeating until done` since it performs a single pass on the data / this is implemented in iterative style
     1. A scheduler runs a batch process to calculate one step
     2. It checks whether it was the last step (e.g. there's no data left to process)
     3. It reruns step 1 if not
-    
+
+- MapReduce is inefficient for this
+
+
+## The Pregel processing model
+
+- The Bulk Synchronous parallel model of computation has become popular - popularized by Google's Pregel paper
+- optimization for batch processing graphs
+
+## Fault Tolerance
+
+- the state of all graph vertices is checkpointed to durable storage at the end of an iteration
+- nondeterministic computations are rolled back / deterministic ones are recovered from the previous state
+
+## Parallel execution
+
+- if the graph can fit in memory ( be it RAM or HDD/SSD ), it will be fastest to compute it on a single machine, even if running on a single thread
+- If the data cannot fit in durable storage, you have to use something like Pregel
+- Parallelizing graph algorithms is ongoing research
+
+## High-Level APIs and Languages
+
+- MapReduce can process petabytes of data on 10_000 big machine clusters
+- Focus is now on improving the programming model, improving efficiency of processing and broadening the set of problems that can be solved by map-reduce
+- Writing MapReduce jobs by hand is laborious, hence the popularity of higher level languages and APIs
+- High level interfaces require less code
+- You can develop interactively by writing analysis code in the shell and iterating over that
+
+## The move toward declarative query languages
+
+- you can allow the framework to analyze the properties on the join inputs and allow it to select the join algorithm fit for the task
+- Spark, Flink and Hive have cost-based optimizers
+- Better than specifying in imperative style HOW to do it 
+- you don't need to remember which joins are available ! (and which join is used could impact processing speed)
+- The freedom to run arbitrary code is what distinguishes batch processing programs from massively-parallel processing databases - DBs have the option to write user specified code, but sharing it is cumbersome
+- Batch processing engines can match MPPs due to declarative queries but have added flexibility
+
+## Specialization for different domains
+
+- Standard processing patterns keep reoccuring, it's useful not having to re-implement them
+- Reusable implementations are emerging - Mahout implements ML algorithms on top of MapReduce, Spark and Flink
+- MADlib implements similar functionality inside a relational MPP
+- K-nearest-neighbours is useful for spatial algorithms
+- In the end, Batch processing algorithms and MPPs end up looking very similar 
+

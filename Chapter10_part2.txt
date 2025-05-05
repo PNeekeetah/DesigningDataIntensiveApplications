@@ -1,0 +1,351 @@
+MapReduce Job Execution
+
+	- programming framework for processing large datasets, like HDFS
+	- Processing pattern: 
+		= Read input files and break them into records (similar to dask frame works, lazily loading data)
+		= Call the mapper function to retrieve key, value pairs
+		= Sort by the keys
+		= Use a reducer function to iterate through keys
+	
+	- 2nd and 4th step involve custom data processing
+	- The MapReduce job has 2 components: 1 callback for maping and another one for reducing
+		+ Maper:
+			~ sequentially iterate through each input record and extract key-value pairs (0 - inf)
+			~ it doesn't keep the state from one record to the next
+		+ Reducer:
+			~ receives the key-values pairs
+			~ creates collections of same ocurances of a key
+			~ iterates through the values of each collection and returns an output record (like number of occurances of the key's collection)
+
+	## Distributed execution:
+
+	- As the mapper-reducer structure processes one input record at a time, not needing to know from where it comes
+	from, and it doesn't 'care' where it's output is going to, it allows for high paralelism from the get go, without
+	needing custom code for it( paralelism)
+	
+	- The MapReduce scheduler tries to run each mapper on one of the machines that stores a replica of the input
+	file, provided that machine has enough spare RAM and CPU resources to run the map task. This principle is 
+	known as putting the computation near the data: it saves copying the input file over the network, reducing
+	network load and increasing locality.
+	
+	- In most cases, the application code that should run in the map task is not yet present
+	on the machine that is assigned the task of running it, so the MapReduce framework
+	first copies the code to the appropriate machines.
+	
+	- The reduce side of the computation is also partitioned. While the number of map
+	tasks is determined by the number of input file blocks, the number of reduce tasks is
+	configured by the job author 
+
+	-The process of partitioning by reducer, sorting, and copying data partitions from mappers to reducers is
+	known as the shuffle
+
+	- As MapReducers(MR) jobs can serve one type of job a time, usually multiple MRs are chained toghether to form
+	workflows, where one MR job takes as input the output of a previous one (except first one)
+
+	- MRs should discard failed or partial outputs
+
+
+Reduce-Side Joins & Grouping
+
+	- By default, for looking through databases, the MRs are using full table scan operations, which can be too ineficient
+	especially for small records. 
+	- A better approach would be to take a copy of the user database and to put it in the same distributed
+	filesystem as the log of user activity events.
+
+	## Sort-merge joins
+	- When the MapReduce framework partitions the mapper output by key and then sorts the key-value pairs, 
+	the effect is that all the activity events and the user record with the same user ID become adjacent to 
+	each other in the reducer input.
+	
+
+	## Bringing related data together in the same place
+	-This separation contrasts with the typical use of databases, where a request to fetch data from a database
+	 often occurs somewhere deep inside a piece of application code. Since MapReduce handles all network 
+	communication, it also shields the application code from having to worry about partial failures, such as 
+	the crash of another node: MapReduce transparently retries failed tasks without affecting the application logic.
+
+
+	## Group By
+	- Besides joins, another common use of the “bringing related data to the same place” pattern is grouping 
+	records by some key
+
+	- Set up the mappers so that the key-value pairs they produce use the desired grouping key
+
+	- Another common use for grouping is collating all the activity events for a particular user session, in 
+	order to find out the sequence of actions that the user took—a process called sessionization
+
+	## Handling skew
+
+	- Processing data with "hot keys" (keys associated with disproportionately large amounts of data) challenges
+	standard distributed methods like MapReduce. Bringing all records for a hot key to a single reducer creates
+	"skew" or "hot spots," causing significant delays as the entire job waits for the overloaded reducer.
+
+	- Solutions include:
+		+ Skewed/Sharded Joins (Pig/Crunch): Randomly distribute hot key records across multiple reducers,
+		often requiring replication of corresponding records from the other input. Hot keys can be 
+		identified via sampling (Pig) or pre-specification (Crunch).
+
+		+ Hive's Skewed Join: Requires explicit hot key definition, stores related records separately, 
+		and uses map-side joins for these keys.
+
+		+ Two-Stage Aggregation: Perform partial aggregation of hot key data across random reducers in a 
+		first stage, then combine these partial results in a second stage.
+
+	- These techniques improve parallelization for skewed workloads but may add complexity like data replication or require prior identification of hot keys.
+
+Map-Side Joins
+	- Distributed Join Strategies:
+		+Reduce-Side Joins:
+			> Join logic executed by reducers.
+			> Mappers prepare data (extract key/value, partition, sort).
+			> Pro: General purpose, works regardless of input data properties.
+			> Con: Expensive due to sorting, network data transfer, and merging steps.
+		+ Map-Side Joins:
+			> Join logic executed by mappers.
+			> Bypasses reducers and sorting phases.
+			> Pro: Faster, avoids reduce-side overhead.
+			> Con: Requires specific assumptions about the input data to be feasible.
+
+	## Broadcast Hash Joins
+	- Scenario: Used when joining a large dataset with a small dataset that can fit entirely in the memory of
+	each mapper.
+
+	- Process:
+		+ Each mapper reads the entire small dataset from the distributed filesystem.
+		+ The small dataset is loaded into an in-memory hash table within each mapper.
+		+ Each mapper then processes its assigned partition of the large dataset.
+		+ For each record in the large dataset's partition, the mapper performs a lookup in the in-memory 
+		hash table using the join key.
+
+	- "Broadcast" Aspect: The small dataset is effectively "broadcast" to all mappers processing the large 
+	dataset.
+
+	- "Hash" Aspect: A hash table is used for efficient lookups of the join key from the small dataset.
+
+	- Advantages: Simple and efficient when the small dataset is truly small.
+
+	- Implementations: Supported by Pig ("replicated join"), Hive ("MapJoin"), Cascading, Crunch, and data 
+	warehouse query engines like Impala.
+
+	- Alternative: Instead of an in-memory hash table, the small dataset can be stored in a read-only index on the local disk. Frequently used parts of this index can be cached by the operating system, providing near in-memory lookup speeds without the full memory requirement.
+
+	##Partitioned Hash Joins
+
+	- Scenario: Used when both input datasets are large but are partitioned in the same way.
+
+	- Process:
+		+ Both datasets are divided into the same number of partitions based on the join key and the same hash function.
+		+ Each mapper is assigned a specific partition number.
+		+ For its assigned partition number, a mapper reads the corresponding partition from both input datasets.
+		+ The mapper loads the partition from one of the datasets (typically the smaller one) into an in-memory hash table.
+		+ The mapper then scans the corresponding partition of the other dataset and performs lookups in the hash table using the join key.
+
+	- Key Requirement: Both input datasets must have the same number of partitions, and records must be assigned to partitions based on the same key and hash function. This often relies on the inputs being the output of prior MapReduce jobs that performed this grouping.
+	- Advantages: Each mapper only needs to load a smaller portion of the data into memory compared to a broadcast join on large datasets.
+	- Implementations: Known as "bucketed map joins" in Hive.
+
+	## Map-Side Merge Joins
+
+	- Scenario: Applicable when the input datasets are partitioned in the same way and sorted based on the same
+	key. The size of the datasets does not have the same memory constraints as broadcast hash joins.
+
+	- Process:
+		+ Each mapper processes corresponding partitions from both input datasets.
+		+ Since the data within each partition is sorted by the join key, the mapper can perform a merge operation similar to what a reducer would do.
+		+ The mapper reads both input files incrementally, in order of the ascending join key.
+		+ Records with the same join key are matched and joined.
+
+	- Prerequisite: Requires the input datasets to be pre-partitioned and pre-sorted by the same key, which typically results from prior MapReduce jobs.
+	- Rationale: Even though the join could have been performed in the reduce stage of the prior job that produced the partitioned and sorted data, a separate map-only job for the merge join might be appropriate if the partitioned and sorted datasets are also needed for other downstream processes.
+	- Advantage: Can handle large datasets without the memory limitations of broadcast hash joins, as it processes data sequentially.
+
+	## MapReduce Workflows with Map-Side Joins
+
+	- Output Structure: The output of a map-side join (whether broadcast or partitioned) is partitioned and 
+	sorted in the same way as the large input dataset. This is because a map task is created for each file block
+	of the large input.
+
+	- Assumptions: Map-side joins (especially partitioned and merge joins) make more assumptions about the 
+	physical characteristics of the input datasets, specifically their size (for broadcast), partitioning scheme,
+	 and sorting order.
+
+	- Metadata Importance: Optimizing join strategies requires knowledge of the physical layout of datasets in 
+	the distributed filesystem, including:
+		+ Encoding format
+		+ Storage directory
+		+ Number of partitions
+		+ Keys by which the data is partitioned
+		+ Keys by which the data is sorted
+	
+	- Metadata Management: In the Hadoop ecosystem, metadata about dataset partitioning is often managed by 
+	tools like HCatalog and the Hive metastore. These tools provide a centralized way to store and access 
+	information about the physical structure of data.
+
+	## The Output of Batch Workflows: Beyond Reports
+
+	- Batch processing, while similar to analytics in its handling of large datasets, often produces outputs that
+	are not simply reports for human consumption.
+
+	- Instead, the results are frequently structured data intended for other systems or processes.
+
+	<<Building Search Indexes as a Prime Example>>
+
+	- Google's initial use of MapReduce for building search engine indexes illustrates a key application of batch
+	workflows.
+
+	- A full-text search index (like Lucene's) allows efficient keyword lookups to find documents containing 
+	those keywords.
+
+	- Batch processing is effective for building these indexes over a fixed set of documents, with mappers 
+	partitioning documents and reducers building the index for their partition.
+
+	- These index files are typically immutable once created, facilitating read-only querying.
+
+	- Index updates can be handled by either periodically rebuilding the entire index or through incremental
+	updates (as supported by Lucene by writing and merging segment files).
+	
+	## Key-Value Stores as Batch Process Output
+
+	- Beyond search indexes, batch processing is used to build machine learning systems (classifiers, 
+	recommendation systems) whose output is often a database.
+
+	- These databases (e.g., of suggested friends or related products) need to be queried by web applications, 
+	which are usually separate from the Hadoop infrastructure.
+
+	- Bad Practice: Directly writing to a production database from within mappers or reducers is discouraged 
+	due to:
+		+ Performance bottlenecks from network requests per record.
+		+ Potential to overwhelm the database with concurrent writes.
+		+ Lack of atomicity and difficulty in handling failures and retries, leading to potential partial or inconsistent data.
+
+	- Better Solution: Building a brand-new, immutable database as files within the batch job's output directory
+	in the distributed filesystem. These files can then be bulk-loaded into read-only key-value stores like 
+	Voldemort, Terrapin, ElephantDB, and HBase (using bulk loading).
+
+	- This approach leverages MapReduce's ability to extract keys and sort data, which is fundamental to building
+	indexes in key-value stores. The read-only nature of these stores simplifies their data structures (e.g., no
+	need for a Write-Ahead Log).
+
+	- Systems like Voldemort allow for atomic switching from old to new data files after a successful bulk load, with easy rollback in case of issues.
+
+	## Philosophy of Batch Process Outputs: Echoes of Unix
+
+	- The handling of output from MapReduce jobs aligns with the Unix philosophy of explicit dataflow, immutable
+	inputs, complete replacement of previous output, and no side effects.
+
+	- This design promotes:
+		+ Ease of Rollback (Human Fault Tolerance): Bugs in code leading to incorrect output can be easily
+		rectified by reverting to previous code and rerunning the job or switching back to the old output. 
+		This is unlike transactional databases where bad data written cannot be undone by code rollback 
+		alone.
+
+		+ Faster Feature Development: Minimizing irreversibility allows for quicker experimentation and 
+		development.
+
+		+ Automatic Retry Safety: The immutability of inputs and discarding of failed task outputs enable
+		safe automatic retries of failed tasks.
+
+		+ Reusability of Data: The same set of output files can serve as input for various downstream jobs,
+		including monitoring and validation processes.
+
+		+ Separation of Concerns: MapReduce jobs separate logic from configuration (input/output paths), 
+		promoting code reuse and allowing different teams to manage job implementation and execution.
+
+	- Differences from Unix: While sharing philosophical similarities, Hadoop leverages more structured file 
+	formats like Avro and Parquet, which provide schema-based encoding and evolution, reducing the need for
+	low-level parsing often required with Unix's untyped text files.
+
+
+	## Comparing Hadoop to Distributed Databases
+
+	<<General-Purpose vs. SQL-Focused:>>
+
+	- Hadoop: Acts more like a general-purpose distributed operating system (HDFS as filesystem, MapReduce as a 
+	flexible processing engine). It can run arbitrary programs.   
+
+	MPP Databases: Primarily focused on the parallel execution of analytic SQL queries on structured data.   
+	
+	<<Diversity of Storage:>>
+
+	- Hadoop: HDFS stores raw byte sequences, allowing for diverse data models and encodings (relational data, 
+	text, images, etc.). Enables "indiscriminate data dumping" and a "schema-on-read" approach. Facilitates 
+	building "data lakes" by centralizing data quickly without upfront schema design.   
+
+	MPP Databases: Require data to be structured according to a specific model (e.g., relational) and imported 
+	into a proprietary storage format after careful upfront modeling.   
+
+	<<Diversity of Processing Models:>>
+
+	- Hadoop: MapReduce allows engineers to run custom code for various processing needs beyond SQL (e.g., 
+	machine learning, search indexing, image analysis). The open platform has fostered the development of other
+	processing models on top of Hadoop (like Hive for SQL).   
+
+	- MPP Databases: Primarily rely on SQL as the query language, which may not be suitable for all types of 
+	complex data processing.
+
+	<<Data Locality and Processing:>>
+
+	- Hadoop: Designed with the principle of moving computation to the data (data locality) stored in HDFS to
+	minimize network transfer.   
+
+	- MPP Databases: While distributed, the data management and processing are often more tightly coupled within
+	the database system itself.
+   
+	<<Fault Tolerance:>>
+
+	- Hadoop (MapReduce): Tolerates task failures by retrying individual tasks. Eagerly writes data to disk for 
+	fault tolerance and assumes data might be too large for memory. Designed for long-running jobs with 
+	potential task failures.   
+
+	- MPP Databases: Typically abort the entire query if a node fails and rely on resubmission or automatic 
+	retry of the whole query. Often prioritize keeping data in memory for performance (e.g., hash joins). 
+	Designed for shorter queries.  
+ 
+	<<Memory and Disk Usage:>>
+
+	- Hadoop (MapReduce): More conservative with memory usage and aggressive with writing to disk, prioritizing 
+	fault tolerance and handling large datasets.   
+
+	- MPP Databases: Tend to be more memory-intensive to optimize query performance by avoiding disk I/O.
+
+	<<Design for Frequent Faults: The Google Context>>
+
+	- MapReduce's design choices (task-level recovery, eager disk writes) are heavily influenced by the 
+	environment it was originally designed for at Google:
+		+ Mixed-Use Datacenters: Online production services and offline batch jobs run on the same machines.
+		+ Resource Preemption: Lower-priority batch tasks (like MapReduce jobs) can be terminated (preempted)
+		if higher-priority tasks need resources.
+		+ High Preemption Rate: MapReduce tasks had a significant risk of preemption (e.g., 5% chance of 
+		termination per hour-long task), often higher than hardware failure rates.
+
+	- This high preemption rate necessitated a design that could tolerate frequent unexpected task termination
+	 without failing the entire job.
+
+	- Contrast with Open Source Schedulers: Open source cluster schedulers like YARN, Mesos, and Kubernetes have
+	historically had less emphasis on general priority preemption compared to Google's internal systems. In 
+	environments with less frequent task termination, some of MapReduce's design decisions might be less 
+	critical.
+
+
+
+
+
+
+
+
+	-
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
