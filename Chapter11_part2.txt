@@ -1,0 +1,198 @@
+DATABASES AND STREAMS |
+----------------------
+	- a replication log is a stream of database write events, produced by the leader, which is further applied by the
+	followers, giving accurate copies of the data
+	
+	- state machine replication principle states: if every event represents a write to the database, and every
+	replica processes the same events in the same order, then the replicas will all end up in the same final state.
+
+
+	 -----------------------------
+	|## KEEPING SYSTEMS IN SYNC ##|
+	 -----------------------------
+	- There is no single solution to satisfy all needs in terms of data storage, querying, and processing, so multiple
+	solutions are used, each keeping a copy of the data, optimized for their respective system
+
+	- To keep systems in sync, in data warehouses, the ETL processed is used, by taking full copies of the database
+	transforming it and then loading it in batches
+
+	- If periodic full database dumps are too slow, an alternative that is sometimes used is dual writes, in which the application 
+	code explicitly writes to each of the systems when data changes: for example, first writing to the database, then updating the
+	search index, then invalidating the cache entries (or even performing those writes concurrently)
+
+	- Cons of using dual writes 
+		-> bring race conditions into the system, which can be solved with concurrency
+		detection mechanisms
+		
+		-> fault-tolerance problems, which lead to inconsistencies. A solution is atomic commits, but it is an
+		expensive solution
+	
+
+	 -------------------------
+	|## CHANGE DATA CAPTURE ##|
+	 -------------------------
+	- for a long time it was considered that databases' replication logs are an internal implementation detail,
+	which should be solved through the databases' data model and query language
+
+	- more recently, the interest for change data capture (CDC) saw an increase.
+	
+	- CDC is the process in which written data changes are observed and extracted as a form, which can be replicated
+	on other systems. It allows for data to be streamlined immediatelly as it is written
+
+	---------------------
+	^^ Implementing CDC^^
+	---------------------
+	- the log consumers can be called derived data systems (DDS), the data stored in the search index and the 
+	data warehouse is just another view onto the data in the system of record
+
+	- CDC is tasked with recording all changes in the system of record and reflecting this changes in  the DDS,
+	ensuring accurate copies of the data
+
+	- CDC makes the db in which the changes were captured a leader and the rest followers. A log-based message
+	broker is transporting the changes to the followers
+
+	- Database triggers can be used to start the capturing process, though they can be fragile and present significant
+	overhead
+
+	- like message brokers, CDC is usually async. (can lead to replication lag due to slow consumers)
+
+	----------------------
+	^^ Initial Snapshot ^^
+	----------------------
+	- there needs to be a checkpoint from which the reconstruction of the database needs to happen. Keeping all
+	the logs can be space consuming, and using the most recent logs, might not be consistent.
+
+	- a snapshot, a known position/offset in the db should be used
+
+	- Some CDC tools integrate this snapshot facility, while others leave it as a manual operation. 
+
+	--------------------
+	^^ Log Compaction ^^
+	--------------------
+	- The principle: the storage engine periodically looks for log records with the same key,
+	throws away any duplicates, and keeps only the most recent update for each key.
+
+	- In a log-structured storage engine, an update with a special null value (a tombstone)
+	indicates that a key was deleted, and causes it to be removed during log compaction
+
+	------------------------------------
+	^^ API support for change streams ^^
+	------------------------------------
+	- More and more dbs started to support change streams as a first-class interface, instead of needing a retrofitted
+	reversed engineeres CDC
+
+
+	 --------------------
+	|## EVENT SOURCING ##|
+	 --------------------
+	- it was developed by domain-driven development (DDD) community
+
+	- involves storing all changes to the application state as a log of change events
+
+	- main diffeences: 
+		+ ES is based on immutable logs, while CDC logs are mutable and low-level
+
+	- makes it easier to evolve applications over time
+
+	- helps with debugging by making it easier to understand after the fact why something happened
+
+	- guards against application bugs 
+
+	-----------------------------------------------
+	^^ Deriving current state from the event log ^^
+	-----------------------------------------------
+	- applications that use ES, take the log of events and transform it into application state
+
+	- transformation can be arbitrary, but always deterministic
+
+	- in ES, log compaction is not possible the same way as with CDC as we need the full log history
+
+	- have some mechanism for storing snapshots of the current state that is derived from the log of events, 
+	so they don’t need to repeatedly reprocess the full log.(performance optimization)
+
+	- the intention is that the system is able to store all raw events forever and reprocess the full event log
+	whenever required
+
+	-------------------------
+	^^ Commands and events ^^
+	-------------------------
+	- The event sourcing philosophy is careful to distinguish between events and commands
+
+	- as a requests comes, it is firstly considered a command till it is successfully validated, when it becomes an event
+
+
+	 --------------------------------------
+	|## STATE, STREAMS, AND IMMUTABILITY ##|
+	 --------------------------------------
+	- whenever a state changes, it is a result of an event that mutated the said state
+
+	- the key idea is that the mutable state and the  append-only immutable log do not contradict each other
+
+	- the changelog represents the evolution of the state over time due to the events
+
+	- storing the changelog durably, allows for the state to be reproducible
+
+	- log compaction is bridging the distinction between the log and the db state, retaining the latest version
+	of the record, while discarding the overwritten versions
+
+	------------------------------------
+	^^ Advantages of immutable events ^^
+	------------------------------------
+	- immutability in dbs is an old idea, implemented for centuries by accountants in finnacial bookkeeping
+
+	- if you accidentally deploy buggy code that writes bad data to a database, recovery is much harder if the
+	code is able to destructively overwrite data. With an append-only log of immutable events, it is much easier
+	to diagnose what happened and recover from the problem.
+
+	- ES allow the emergence of patterns or other secondary data from the events log succesion, which can be used
+	for other areas, like social engineering
+
+	----------------------------------------------------
+	^^ Deriving several views from the same event log ^^
+	----------------------------------------------------
+	- having an explicit translation step from an event log to a database makes it easier to
+	evolve your application over time: if you want to introduce a new feature that
+	presents your existing data in some new way, you can use the event log to build a
+	separate read-optimized view for the new feature, and run it alongside the existing
+	systems without having to modify them.
+
+	- command querry responsability segregation (CQRS) represents the idea of separating
+	the form in which data is written from the form it is read, and by allowing several
+	different read views
+
+	- traditional approach to database and schema design is based on the fallacy that
+	data must be written in the same form as it will be queried
+
+	- it is entirely reasonable to denormalize data in the read-optimized views, as the translation process
+	gives you a mechanism for keeping it consistent with the event log
+
+	------------------------
+	^^ Concurency control ^^
+	------------------------
+	- biggest downside of event sourcing and change data capture is that the consumers
+	of the event log are usually asynchronous
+
+	- one solution would be to perform the updates of the read view synchronously with
+	appending the event to the log.
+
+	- deriving the current state from an event log also simplifies some aspects of concurrency control
+
+	- with event sourcing, you can design an event such that it is a self-contained description of a user action
+	The user action then requires only a single write in one place—namely appending the events to 
+	the log—which is easy to make atomic.
+
+	- if the event log and the application state are partitioned in the same way then a straightforward
+	single-threaded log consumer needs no concurrency control for writes
+
+	---------------------------------
+	^^ Limitations of immutability ^^
+	---------------------------------
+	- a high rate of updates and deletes on a comparatively small dataset may lead to the immutable history
+	growing prohibitively large, fragmentation may 	become an issue, and the performance of compaction and 
+	garbage collection becomes crucial for operational robustness
+
+	- there may also be circumstances in which you need data to be deleted for administrative reasons.
+	(you actually want to rewrite history and pretend that the data was never written in the first place)
+
+	- deletion is more a matter of “making it harder to retrieve the data” than actually “making it 
+	impossible to retrieve the data.”

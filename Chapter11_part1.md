@@ -78,7 +78,7 @@
 
 - These are traditional views on message brokers and they're implemented in software like RabbitMq and ActiveMQ (to name a few)
 
-### Multiple consumesr
+### Multiple consumers
 
 - if multiple consumers read messages from the same topic, we have the following patterns:
 
