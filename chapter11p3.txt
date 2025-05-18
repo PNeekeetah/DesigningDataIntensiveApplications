@@ -1,0 +1,138 @@
+11. Stream Processing
+
+    Section 3: Processing Streams
+
+        - once a stream is transported it can be processed
+        - options exist: data in the events can be written in a database, search index, storage system
+                         pushing events to users in some way (notifications) or by streaming the events in a real-time dashboard for visualisation
+                         process one or more input streams to produce one or more output streams (such a pipeline of several processing stages before they eventually end up at an output)
+        - processing streams to produce other, derived streams is known as a job or an operator,similar to the Unix processes and MapReduce jobs discussed previously, including in patterns for partitioning and parallelisation
+        - one crucial difference to batch jobs is that a stream never ends with implications like making sorting senseless and sort-merge joins unusable
+
+        Uses of Stream Processing
+
+        - monitoring purposes have a long history - fraud detection systems in financial transactions, execution of trades according to rules, monitorisation of machine statuses in a factory or military and intelligence tracking
+
+        Complex event processing
+
+        - complex event processing (CEP) - approach for analysing event streams, especially one that requires certain event patterns, somewhat similar to regular expressions, allowing searching using specified rules for certain patterns
+        - high-level languages like SQL or GUIs are used, similar to a processing engine and, when a match is found a complex event is emitted with the details of the detected element
+        - the relationship between queries and data is reversed compared to normal databases - queries are not stored long term instead of transient and events from the stream "flow past"
+
+        Stream analytics
+
+        - a different area of use, the distinction from CEP being blurry, analytics being usually less interested in finding specific event sequences and more oriented towards aggregations and statistical metrics like the rate of some type of event, rolling averages over a time period, comparing current statistics over previous intervals (also, for detecting anomalies)
+        - usually computations are done for a fixed interval, time of aggregation being referred to as a window
+        - probabilistic systems can be used (Bloom filters, for example, or HyperLogLog), which albeit produce approximate results, have the advantage of being less memory-demanding
+        - approximation does not make stream processing lossy or inexact (probabilistic algorithms can be interpreted as a form of optimisation)
+
+        Maintaining materialised views
+
+        - materialised view - an alternative view onto some dataset so that one can query it efficiently and updating it when the underlying data changes
+        - in event sourcing, application states are maintained by applying a log of events (a kind of materialised view)
+        - unlike event sourcing, it is not sufficient to consider only events within some time window, all events over an arbitrary time period (including obsolete ones) need to be there
+
+        Search on streams
+
+        - a need for searching for pattern consisting of multiple events based on complex criteria such as full-text queries must be fulfilled
+        - an example might be news feeds - a search query is done in advance and then continually matching the stream of news items
+        - searching a stream is similar to a CEP but here, optimisation can be done by indexing the queries as well as the documents
+
+        Message passing and RPC
+
+        - message-passing systems are not thought of as stream processor, usually
+        - actor frameworks are primarily a mechanism for messaging concurrency and distributed execution while stream processing is a data management technique
+        - communication between actors is often ephemeral whereas event logs are durable
+        - actors can communicate in arbitrary ways but stream processors are usually set up in acyclic pipelines where every stream is the output of one particular job
+        - some crossover areas do exist, like distributed RPC
+
+        Reasoning About Time
+
+        - dealing with time can be surprisingly tricky
+        - batch processes - rapidly crunching through a large collection of historical events leaves little reason for looking at the system clock
+        - stream processes - the local system clock on the processing machine determines windowing
+
+        Event time versus processing time
+
+        - reasons for delayed processing are multiple: queuing, faults, performance issues and so on and lead to an unpredictable ordering
+        - confusing event time and processing time leads to bad data (for example, a stream processor that measures the rate of requests might misreport an anomaly because it was shut down for a time)
+
+        Knowing when you're ready
+
+        - defining windows in terms of event time means one can never be sure that all the events have been received
+        - straggle events that arrive after the window has been declared complete can be treated in two ways: ignoring them and publishing a correction
+        - declaring that "no more messages with a timestamp earlier than t" can be an option but difficult when multiple machines are generating events
+
+        Whose clock are you using, anyway?
+
+        - events that can be buffered at several points in the system can make it even more difficult to assign timestamps
+        - adjusting for incorrect device clocks an approach can be to log 3 timestamps: when the event occurred according to the device clock, when the event was sent to the server according to the device clock and when the event was received by the server according to the server clock ; subtracting the second timestamp from the third can estimate the offset
+
+        Types of windows
+
+        - there are a few options for deciding how windows over a time period should be defined
+        - tumbling window - fixed length, every event belongs to exactly one window
+        - hopping window - fixed length but allows overlap in order to provide some smoothing
+        - sliding window - contains all the events that occur within some interval of each other
+        - session window - no fixed duration, defined by grouping together all events for the same user that occur closely in time and ends when the user has been inactive for some time
+
+        Stream Joins
+
+        - there is the same need for joins in streams as batch jobs but the possibility of new events appearing at any time makes them more challenging
+
+        Stream-stream join (window join)
+
+        - an example with a search feature on a website: calculating the click-through rate for each URL needs to have events for the search action and the click action brought together
+        - a click might not come for various reasons and even if it does, the time between it and search might be highly variable
+        - to implement this type of join, a stream processor need to maintain state (all the events that occurred in a previous interval must be indexed by session ID)
+
+        Stream-table join (stream enrichment)
+
+        - to perform this join, the stream process needs to look at one activity event at a time, look up the user ID in the database and add the profile information to the activity event
+        - one approach is to load a copy of the database into the stream processor (kind of similar to hash joins)
+        - a difference to batch jobs is that the copy of a long-running database needs to be kept up-to-dataset
+
+        Table-table join (materialised view maintenance)
+
+        - maintaining something akin to a Twitter timeline a cache is used, materialising an maintaining requiring a specific event processing
+        - streams of events for tweets and follow relationships are needed to implement this cache maintenance
+
+        Time-dependence of joins
+
+        - the 3 types of joins are similar (some state must be maintained, the order of events is important, etc)
+        - if events of different streams happen around a similar time, the order of processing has implications for the action of joining
+        - if the ordering is undetermined the join becomes nondeterministic (rerunning the job on the same input does not result in the same output), issue also known as slowly changing dimension (SCD) in data warehouses, where the issue is solved by giving an unique identifier for a particular version of the joined record
+
+        Fault Tolerance
+
+        - fault tolerance is a problem that appear in stream processing, just like batch jobs but less straightforward
+        - in batch jobs like MapReduce, a task can be re-done on another machine, the output is the same and the visible effect in the output of multiple processing events is the same as in the case of one processing (exactly-once semantics)
+        - finishing processing a hypothetically infinite stream means waiting until a task is finished is not possible
+
+        Microbatching and checkpointing
+
+        - one solution is breaking the stream into small blocks and treat each one as a mini batch process (microbatching), as used in Spark, each of around one second but with the compromise of greater scheduling and coordination overhead in smaller batches and longer delays before results in larger ones
+        - a variant, used in Apache Flink, is to periodically generate rolling checkpoints of state and write them to storage so that in case of crashes it can restart from the most recent one
+        - microbatching and checkpointing approaches provide the same exactly-once semantics as batch processing but when the output leaves the processor the framework is not capable of discarding the output of a failed batch and restarting can cause the external side effect to happen twice
+
+        Atomic commit revisited
+
+        - the appearance of exactly-once processing when faults happen can be ensured if and only if the processing is successful
+        - any messages sent, database writes, changes to operator states need to happen atomically
+
+        Idempotence
+
+        - idempotence can be a solution to the need to discard the output of any failed task
+        - idempotent operations can be performed multiple times but with the same effect as performing only once (an example being setting a key-value store to a fixed value)
+        - operations not naturally idempotent might be made so with extra metadata (example, Kafka messages have a persistent, monotonically increasing offset)
+        - other systems like Storm's Trident's state handling has assumptions of idempotence (restarting a failed task must replay the same messages in the same order)
+
+        Rebuilding state after a failure
+
+        - options to ensure that a state can be recovered after failure is to keep it an a remote datastore albeit querying is slow
+        - an alternative is keeping state local to the stream processor and replicate it periodically
+        - Flink periodically captures snapshots of operator state and writes them to storage while Samza and Kafka Streams replicate state changes by sending them to a dedicated Kafka topic with log compaction
+        - cases exist when state can be rebuilt from input streams
+        - the trade-offs depend on the performance of the underlying infrastructure (delays, bandwidth)
+
+
