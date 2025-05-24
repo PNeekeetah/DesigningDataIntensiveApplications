@@ -1,0 +1,89 @@
+Doing The Right Thing
+
+    -> All systems are built to fullfil a certain purpose, and every action has its
+    own intended and unintended consequences
+
+    -> Data may be an abstract thing, but t=it represents behaviours,
+    interests and paterns of the consumers
+
+    -> Technology is neither good or bad in itself, but the way we make use of it
+    can determine it's ethical standpoint
+
+
+    ## Predictive Analytics##
+
+    - Is a major part of "Big Data"
+
+    - It can be used either for 
+
+
+    ##Bias and Discrimination##
+
+    -> a decision made by an algorithm is not inherently better or worse
+    than one done by a human
+
+    ##Responsability and accountability##
+
+    -> while a decision taken by a person has that individual accaountable for it,
+    for algorithms this is not the case, still being a fairly gray area
+
+    -> We might be able to make the case of the person/team/company that created the algorithm can be held accaountable
+    for some predictive algorithms, it is not lways true, as for example, in ML. the algorithms are statistical models,
+    driven by data, which might be or not biased, but the model can generate assumptions based on
+    this data, which might unwillingly descriminate against some users, due to some sheer unlucky correlations in the data, 
+    for which the creator of the algorithm can not be held accountable, as this unwilling behaviour is not part of his design
+
+
+    ##Feedback Loops##
+
+    -> Due to adaptivenes and perfectioning of predictive algorithms, there is a chance
+    were they will start showing just what the user wants to see/agrees to
+    
+    NOTE: for some time now, there has been an introduction of randomnes in such algorithms to avoid this scenarios,
+    but they can still happen, or show predominantly just what the user wants to see
+
+    ##Privacy and Tracking##
+
+    -> Due to descriptiveness characteristic of data, it can pose a privacy and ethical issue for
+    users confidentiality
+
+    ##Surveillance##
+
+    -> Some data collection from iot devices is similar to total surveilance to which some
+    users happily and eagerly oblige, providing an environment similar to an utopian totalitarian
+    surveilnce ("wet dreams") similar to the world desribed in 1984 book by George Orwell
+
+
+    ##Consent and Freedom of Choice##
+
+    -> even though most apps provide consent forms and policies about what data
+    is collected from the users and how it is processed, they are ussually unclear, vague or too technical for 
+    the average user to understand, making a case for the disscusion of how meaningful is acctually the consent we 
+    give to apps when engaging with their data collection. 
+
+    -> the relationship between the service and the user is very asymmetric and one-
+    sided, the terms are set by the service, not by the user
+
+    ##Privacy and Use of Data##
+
+    -> Even though the primary data which is provided by the users in some quantities depending on their 
+    privacy settings, the secondary data, that comes from analyzing the primary data is not subject to the same 
+    policy, rising a case of how private are our lives in this surveillance systems
+
+    ##Data as assets and power##
+
+    -> When a company goes bankrupt, the personal data it has collected is one of the assets that get sold.
+
+
+    ##Legislation and Self-Regulation##
+
+    -> while there are some legislations that are limitin the amount of data collected and processesed by companies,
+    they haven't been necesarly kept up to date, becoming inherently less restrictve with todays technologies, suggesting
+    that they might need to revised and or updated to better reflect todays concerns
+
+    -> Companies that collect lots of data about people oppose regulation as being a burden
+    and a hindrance to innovation. To some extent that opposition is justified. For exam‐
+    ple, when sharing medical data, there are clear risks to privacy, but there are also
+    potential opportunities: how many deaths could be prevented if data analysis was
+    able to help us achieve better diagnostics or find better treatments? Over-
+    regulation may prevent such breakthroughs.
