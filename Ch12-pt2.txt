@@ -1,0 +1,59 @@
+Unbundling databases
+There are 2 main philosophies when it comes to information management - storing data, processing/querying data
+— Unix: low-level hardware abstraction
+— Relational DBs: high-level abstraction that hides complexity of data structures on disk without needing to know implementation details
+
+DBs have provided us with useful features like secondary indexes, materialized views (precomputed cache of query results), replication logs (copies of data on other nodes), and full-text search indexes (allow keyword searches) for querying data. The idea now is to apply these concepts to the data flow across an organization. If the data flow is considered one large DB, batch/stream/ETL processes resemble systems that keep indexes or materialized views up to date. 
+
+There is no single data model or storage format suitable for all access patterns, but we can combine derived data systems to either:
+— Unify reads: read-only querying across several systems through federated DBs (eg PostgreSQL’s foreign data wrapper). Use a high-level query language with complicated implementation to combine data from separate places
+— Unify writes, needs to make sure that all data changes end up in the right place even in event of faults. We effectively unbundle index maintenance features in a way that can synchronize writes across separate technologies/systems.
+
+Composing data systems by synchronizing writes
+Synchronizing writes typically requires distributed transactions across heterogeneous storage systems, but because we want to synchronise writes across different technologies, an asynchronous event log with idempotent writes is a much more robust and practical approach. We want to achieve exactly-once semantics. Log-based integration has the advantage of loose coupling between components, which:
+1. asynchronous event streams make system more robust to outages or performance degradation of individual components, since faults can be contained to the consumer which is delayed, while synchronous distributed transactions can escalate local faults
+2. unbundling data systems allows different software components to be developed and maintained independently. Event logs provide a shared interface that is powerful enough to capture strong consistency properties
+
+The goal of unbundling is to combine several different DBs to achieve good performance for a much wider range of workloads - breadth, not depth. Unbundling is best used when there is no single existing solution that satisfies all requirements
+
+We don’t have the unbundled database equivalent of the Unix shell, i.e a way for composing storage and processing systems in a declarative way, eg taking all documents in a MySQL db and indexing them in ElasticSearch. We would also like to precompute and update caches more easily rather than writing application code for it
+
+Designing applications around dataflow
+Today’s data systems need to be fault-tolerant, scalable, and store data durably. They need to integrate disparate technologies and reuse existing libraries and services. Some of these ideas are:
+— Application code as a derivation function: when one dataset is derived from another, it goes through some kind of transformation (eg ML model is output from feature extraction logic). Often, because of the domain specificity, custom application code is required and this has traditionally been a problem for DBs
+— Separation of application code and state: Typically, if we want to find whether the contents of the DB have changed, you need to frequently poll it. Support for producer/consumer or observer patterns (which notify you when the value changes) are typically not supported by default. DBs are also not well suited for running application code - these are better left to tools like Docker or YARN, DBs are better used for storing state.
+
+We need meaningful interaction between application code and state instead of separating them, so ideally application code needs to respond to state changes in one place by triggering state changes in another place. We can use stream processing and messaging systems for this, but note that maintaining derived data is not the same as asynchronous job execution, and we need the following properties:
+— Stable message ordering: While maintaining derived data, order of state changes is important. Many message brokers do not have this property
+— Fault-tolerant message processing: Fault tolerance is key for derived data - we cannot afford to lose a single message lest we go out of sync. Both message delivery and state updates must be reliable
+
+Stream processors and services
+Break down functionality into a set of services that communicate via sync network requests (eg REST API), which reduces coordination effort between teams that work on different services. A dataflow system tries to replace these sync requests with one directional async message streams. For instance instead of querying a currency exchange rate db, we subscribe to a stream of exchange rates ahead of time and writes the latest value to a local database, such that we are not tolerant to faults in cases where the query to get the exchange rate fails. This is a stream join (see Ch 11) and we do need to take into account time dependence of this join if we wanted to reconstruct this original input
+
+
+Observing Derived State
+- Dataflow systems give us a way of creating derived datasets and keeping them up to date. Whenever some information is written, it may go through multiple stream/batch processes such that every derived dataset in this "write path" is updated
+- Such derived data is created because we want to query it later in the "read path"
+- The write path can be precomputed so that the read path only needs to happen when someone asks for it. Similar to functional programming where write path = eager evaluation, read path = lazy evaluation. 
+- Derived dataset is tradeoff between the amount of work to be done at write time vs amount to be done at read time 
+
+Materialised views and caching
+- One example is using a full-text search. Write path needs to update index entries for all terms that appear in a document, but reads need to search for each of the words in the query. With no index, we need to scan over all documents so write effort is minimal but read time requires a lot of work. We can shift the workload to the write path by precomputing a cache of the most common queries so that they can be served quickly without needing to go to the index
+
+Stateful, offline-capable clients
+- Traditionally most web apps have used a stateless client/server model that requires internet connection
+- Many mobile apps store a lot of state on device and don't require a trip to server for user interactions, same with single-page JS web apps such as persistent local storage in the browser
+- Offline-first applications try to do as much as possible with a local database and sync with remote servers when a connection is available. We can think of on-device state as a cache of state on the server
+- The traditional webpage does not subscribe to state updates and is a stale cache that is not updated unless polled for changes. 
+- However, if we actively push state changes to client devices, although client still needs a rad path to get its initial state, we extend the write path and reduce staleness. Although devices will be offline some of the time, consumers of log-based messages (in this case, the logs are state updates) can reconnect after being disconnected and won't miss any messages, so state can be updated once the client device is back online
+- Tools like Elm, React, Flux and Redux manage internal client-side state by subscribing to a stream of events representing user input or responses from a server. However the assumption of stateless clients and request/response interactions is deeply ingrained in our databases, libraries, and frameworks, so very few datastores support the publish/subscribe model
+
+Storing reads as events
+- A stream processor typically writes derived data to a store, and writes go to an event log while reads are transient and go directly to the nodes that store the data being queried. However if we represent reads as stream of events, and send both reads and writes through a stream processor, the processor can respond to read events by emitting the result of the read to an output stream. This is effectively a stream-table join between the stream of read queries and the database
+- Recording a log of read events can help track causal dependencies and track what users are seeing before they made a particular decision, especially since the underlying data we are joining to might change. Eg for a particular transaction, see what customer saw as predicted shipping date and inventory status.
+- Tradeoff is additional storage and I/O cost
+
+Multi-partition data processing
+- For queries that only interact with 1 partition, collecting a stream of responses might be unnecessary. But it is useful for distributed execution of complex queries that need to combine data from several partitions
+- Storm distributed RPC (remote procedure calls) supports this pattern
+- An example might be fraud prevention - we might want to lookup if IP address, email address, etc are "risky", and information for each attribute is stored separately and also multipartitioned, so collecting aggregate information about overall risk requires a sequence of joins with differently partitioned datasets

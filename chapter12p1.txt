@@ -1,0 +1,77 @@
+12. The Future of Data Systems
+
+    - the last chapter proposes some of the author's ideas regarding how the design and building of applications should be done
+    - space for disagreement exist, according to him
+
+    Section 1: Data Integration
+
+        - in general, trade-off have to be chosen in the construction of software, trying to do everything usually fails or is among the worse options
+        - mapping between the software products and the circumstances where they are a good fit can be challenging especially because vendors might not be sincere or clear
+        - even with a perfect correspondence the usage of data, unlikely suited for all the circumstances, can cause problems
+
+        Combining Specialized Tools by Deriving Data
+
+        - an example is the need for specialist information retrieval in OLTP databases in contrast to how unsuitable search indexes are as durable systems of record
+        - additionally, one needs to keep copies of the data in various forms and in different locations
+        - statements like "99% of people only need X" or "... don't need X" reflect the experience of the person having this opinion
+
+        Reasoning about dataflows
+
+        - copies of the same data might need to be maintained in several storage systems to satisfy access patterns
+        - the order of writing and changing the database each comes with trade-offs and compromises
+        - it is possible to funnel all user inputs through a single system that decides ordering of events
+        - updating can be made deterministic or idempotent
+
+        Derived data versus distributed transactions
+
+        - keeping different data systems consistent involves distributed transactions in classical systems
+        - transaction systems provide linearisability while derived data systems are updated asynchronously
+        - the author believes transaction systems have poor fault tolerance and performance, and while better protocols might exist in the future, adoption and integration would be difficult
+        - therefore, he believes, that log-based derived data is a better approach
+
+        The limits of total ordering
+
+        - in systems with bigger and more complex payloads constructing a totally ordered log is not always feasible
+        - constructing a totally ordered log requires a single leader node, if the servers are spread geographically, usually there is a separate leader in each location, events originating in different microservices have no defined order, some application's client-side is updated immediately on input and can work offline resulting in different orders
+        - total order broadcast is the total order of events equivalent to consensus, the design of such algorithms being still an open problem
+
+        Ordering events to capture causality
+
+        - when causal links are absent, the lack of total order is not a big problem, but causal dependencies can appear in subtle ways, like a social networking service where a relationship is broken and messages should no longer be seen by the other party
+        - such unfriending problems are effectively join events but simple solutions do not exist (logical timestamps, logging events to record states and conflict resolution algorithms have serious downsides)
+
+        Batch and Stream Processing
+
+        - batch and stream processors are tools for making sure data ends up in the right place at the right time
+        - the two have a lot in common but a main difference is that stream processes operate on unbounded datasets whereas batch ones have a known, finite size
+        - difference between implementation is more blurry, like breaking streams into microbatches
+
+        Maintaining derived state
+
+        - batch processing has a strong functional flavour - deterministic, pure functions with output dependent on the input with no side effects are encouraged
+        - such a paradigm is good for fault tolerance but also simplifies reasoning about dataflows
+        - albeit derived data systems can be maintained synchronously, robust ones are more typical asynchronous
+
+        Reprocessing data for application evolution
+
+        - stream processing allows changes in the input to be reflected in derived views with low delay, unlike batch processing processing where accumulated historical data can be reprocessed in order to derive new views onto an existing dataset
+        - such reprocessing is a good mechanism for maintaining a system
+        - derived views allow gradual evolution, for example a restructuring of a dataset does not need to perform the migration as a sudden switch, which has the advantage of reversibility in cases of damage
+
+        Schema Migrations on Railways
+
+        - "schema migrations" occur in non-computer systems as well
+        - multiple gauge standard existed in the early days of train adoption that, for a time, worked in parallel
+
+        The lambda architecture
+
+        - combining batch processing and stream processing gave rise to the proposal of lambda architecture
+        - the core idea is to record incoming data by appending immutable events to an always-growing dataset from which read-optimised can be derived (running two such different system in parallel is required)
+        - the stream processor consumes the events and quickly produces an approximate update to the view, later the batch processor consumes the same set of events and produces a corrected version of the derived view
+        - this approach minimises the downsides of each
+        - the author identifies some practical problems: having to maintain the same logic in both batch and stream processing is difficult, the stream and batch pipelines must be merged in order to respond to user requests, reprocessing entire historical datasets frequently is expensive on large datasets
+
+        Unifying batch and stream processing
+
+        - recent work allowed lambda architecture to be used without downsides - both batch and stream computations can be implemented in the same system
+        - features required are: the ability to replay historical events through the same processing engine that handles the stream of recent events, exactly-once semantics for stream processors, tools for windowing by event time, not processing time
